@@ -1,0 +1,223 @@
+# =============================================================================
+# MILESTONE 7 — Packaging & Windows Startup
+# tracker_app — PyInstaller + Task Scheduler setup guide
+# =============================================================================
+# Follow these steps IN ORDER on your Windows machine.
+# All commands are run in PowerShell or Command Prompt unless noted.
+# =============================================================================
+
+
+# ===========================================================================
+# PART 1 — INSTALL DEPENDENCIES
+# ===========================================================================
+
+# 1a. Install all Python packages
+pip install pyautogui pillow opencv-python google-api-python-client \
+            google-auth-httplib2 google-auth-oauthlib pyinstaller
+
+# 1b. Verify PyInstaller is available
+pyinstaller --version
+
+
+# ===========================================================================
+# PART 2 — FIRST-TIME GOOGLE DRIVE AUTH
+# (Do this BEFORE building the .exe — it writes token.json)
+# ===========================================================================
+
+# From inside the tracker_app folder:
+cd C:\path\to\tracker_app
+python setup_drive.py
+
+# What this does:
+#   - Checks credentials.json exists
+#   - Opens a browser window → sign in with your Google account
+#   - Writes token.json  ← this file must exist before building the .exe
+#   - Does a test upload to confirm Drive access works
+#
+# IMPORTANT: token.json must be present BEFORE running PyInstaller (Part 3).
+# The .exe reads it at runtime to authenticate silently.
+
+
+# ===========================================================================
+# PART 3 — BUILD THE .EXE WITH PYINSTALLER
+# ===========================================================================
+
+# 3a. Navigate to the tracker_app folder
+cd C:\path\to\tracker_app
+
+# 3b. Run PyInstaller with the correct flags
+pyinstaller ^
+  --onefile ^
+  --noconsole ^
+  --name tracker_app ^
+  --add-data "credentials.json;." ^
+  --add-data "token.json;." ^
+  --add-data "config.py;." ^
+  --hidden-import=cv2 ^
+  --hidden-import=pyautogui ^
+  --hidden-import=PIL ^
+  --hidden-import=googleapiclient ^
+  --hidden-import=google.auth ^
+  --hidden-import=google_auth_oauthlib ^
+  main.py
+
+# FLAG EXPLANATIONS:
+#   --onefile       Bundle everything into a single .exe (easier to deploy)
+#   --noconsole     No black terminal window appears (silent background app)
+#   --name          Output exe name
+#   --add-data      Bundle credentials.json and token.json INTO the exe
+#                   Format is  "source;dest_folder_inside_exe"
+#   --hidden-import Force-include packages PyInstaller misses via static analysis
+
+# 3c. After build completes, your .exe is at:
+#   tracker_app\dist\tracker_app.exe
+
+# 3d. TEST it runs correctly before setting up startup:
+.\dist\tracker_app.exe
+# Check logs\tracker.log — you should see "Tracker started" and cycle logs.
+# Press Ctrl+C to stop it cleanly.
+
+
+# ===========================================================================
+# PART 4 — ADD TO WINDOWS STARTUP
+# ===========================================================================
+# Two methods — choose ONE.
+# Method A (simpler)  : Windows Startup Folder — runs when YOU log in
+# Method B (stronger) : Task Scheduler — runs at boot, even before login
+
+
+# ---------------------------------------------------------------------------
+# METHOD A — Startup Folder  (recommended for personal use)
+# ---------------------------------------------------------------------------
+# Pros: Simple, no admin rights needed, easy to remove
+# Cons: Only runs after you log in (fine for a personal machine)
+
+# A1. Open the Startup folder in Explorer:
+#     Press  Win + R  →  type:  shell:startup  →  press Enter
+
+# A2. Create a shortcut to your .exe inside that folder:
+#     Right-click inside the Startup folder
+#     → New → Shortcut
+#     → Browse to:  C:\path\to\tracker_app\dist\tracker_app.exe
+#     → Name it:    tracker_app
+#     → Finish
+
+# A3. (Optional) Configure the shortcut to start minimised:
+#     Right-click the shortcut → Properties
+#     → Run: Minimized
+#     → OK
+
+# A4. Test: Log out and log back in.
+#     After ~30 seconds check logs\tracker.log for "Tracker started".
+
+
+# ---------------------------------------------------------------------------
+# METHOD B — Task Scheduler  (runs at system boot, no login required)
+# ---------------------------------------------------------------------------
+# Pros: Starts at boot, survives log-out, most reliable
+# Cons: Requires admin rights to create the task
+
+# B1. Open Task Scheduler
+#     Press  Win + S  →  search "Task Scheduler"  →  Open
+
+# B2. Create a new task  (Action menu → Create Task)
+
+# --- General tab ---
+#   Name:              tracker_app
+#   Description:       Screenshot + webcam capture background service
+#   Run whether user is logged on or not:  ✓  (check this)
+#   Run with highest privileges:           ✓  (check this)
+#   Configure for:     Windows 10  (or your version)
+
+# --- Triggers tab → New ---
+#   Begin the task:    At startup
+#   Delay task for:    30 seconds   ← gives Windows time to connect to Wi-Fi
+#   Enabled:           ✓
+
+# --- Actions tab → New ---
+#   Action:            Start a program
+#   Program/script:    C:\path\to\tracker_app\dist\tracker_app.exe
+#   Start in:          C:\path\to\tracker_app\dist\
+#                      ^^^^ IMPORTANT: set "Start in" so relative paths work
+
+# --- Conditions tab ---
+#   Start only if the following network connection is available:
+#     Any connection   ✓   ← ensures Drive uploads can succeed
+
+# --- Settings tab ---
+#   If the task is already running:   Do not start a new instance
+#   ✓  Run task as soon as possible after a scheduled start is missed
+
+# B3. Click OK → enter your Windows password when prompted.
+
+# B4. Test: Right-click the task → Run
+#     Check logs\tracker.log for "Tracker started".
+
+# B5. To stop the task:
+#     Right-click the task in Task Scheduler → End
+#     OR kill the process:  taskkill /IM tracker_app.exe /F
+
+
+# ===========================================================================
+# PART 5 — FOLDER STRUCTURE AFTER BUILD
+# ===========================================================================
+
+# tracker_app/
+# ├── dist/
+# │   └── tracker_app.exe       ← THE RUNNABLE APP
+# ├── build/                    ← PyInstaller temp files (safe to delete)
+# ├── tracker_app.spec          ← PyInstaller spec (keep for rebuilds)
+# ├── main.py
+# ├── config.py
+# ├── credentials.json          ← keep here (source)
+# ├── token.json                ← keep here (source)
+# ├── logs/
+# │   └── tracker.log           ← runtime log
+# ├── temp_images/              ← should always be empty (files deleted after upload)
+# ├── capture/
+# ├── uploader/
+# └── utils/
+
+
+# ===========================================================================
+# PART 6 — REBUILDING AFTER CODE CHANGES
+# ===========================================================================
+
+# If you edit any .py file, rebuild the exe:
+cd C:\path\to\tracker_app
+pyinstaller tracker_app.spec     ← reuses existing spec, faster than full rebuild
+
+# If you need to regenerate the spec from scratch:
+# Delete tracker_app.spec and re-run the full pyinstaller command from Part 3.
+
+
+# ===========================================================================
+# PART 7 — TROUBLESHOOTING
+# ===========================================================================
+
+# Problem: .exe opens and immediately closes
+#   → Remove --noconsole, run from terminal to see the error output
+#   → Check logs\tracker.log
+
+# Problem: "credentials.json not found"
+#   → The --add-data flag bundles the file but PyInstaller extracts to a temp
+#     folder at runtime. The app already handles this via sys._MEIPASS.
+#     If you see this error, add this to config.py:
+#
+#       import sys
+#       _BASE = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+#       CREDENTIALS_FILE = os.path.join(_BASE, "credentials.json")
+#       TOKEN_FILE        = os.path.join(_BASE, "token.json")
+
+# Problem: Webcam not detected
+#   → Change CAMERA_INDEX in capture/webcam.py from 0 to 1 (or 2)
+#   → Rebuild the exe
+
+# Problem: Drive upload fails silently
+#   → Check logs\tracker.log for the error details
+#   → Re-run python setup_drive.py to re-authenticate
+
+# Problem: Token expires
+#   → token.json has a refresh_token, so it auto-refreshes.
+#   → If you revoke app access in Google Account settings,
+#     delete token.json and re-run python setup_drive.py
