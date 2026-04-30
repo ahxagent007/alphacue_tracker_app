@@ -9,20 +9,14 @@ import sys
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-# When running as a PyInstaller .exe, __file__ points inside a temp extraction
-# folder (_MEIPASS). We split paths so:
-#   _BUNDLE_DIR  — where bundled assets live (credentials.json, token.json)
-#   BASE_DIR     — where the .exe itself sits (logs/ and temp_images/ go here)
 if getattr(sys, "frozen", False):
-    # Running as compiled .exe
-    BASE_DIR    = os.path.dirname(sys.executable)   # folder containing the .exe
-    _BUNDLE_DIR = sys._MEIPASS                       # temp folder with bundled files
+    BASE_DIR    = os.path.dirname(sys.executable)
+    _BUNDLE_DIR = sys._MEIPASS
 else:
-    # Running as plain Python script
     BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
     _BUNDLE_DIR = BASE_DIR
 
-TEMP_IMAGE_DIR  = os.path.join(BASE_DIR, "temp_images")   # staging area for captures
+TEMP_IMAGE_DIR  = os.path.join(BASE_DIR, "temp_images")
 LOG_DIR         = os.path.join(BASE_DIR, "logs")
 LOG_FILE        = os.path.join(LOG_DIR, "tracker.log")
 
@@ -41,11 +35,24 @@ MAX_IMAGE_WIDTH     = 1280             # pixels; image is scaled down if wider
 MAX_IMAGE_HEIGHT    = 720              # pixels; maintains aspect ratio
 
 # ---------------------------------------------------------------------------
-# Google Drive
+# Gmail — sender credentials
 # ---------------------------------------------------------------------------
-GOOGLE_DRIVE_FOLDER_ID  = "YOUR_FOLDER_ID_HERE"   # replace after Drive setup
-CREDENTIALS_FILE        = os.path.join(_BUNDLE_DIR, "credentials.json")
-TOKEN_FILE              = os.path.join(_BUNDLE_DIR, "token.json")
+# SENDER_EMAIL  : the Gmail account that sends the email (must be YOUR account)
+# SENDER_APP_PASSWORD : a 16-char Google App Password (NOT your regular password)
+#   How to get one:
+#     1. Go to https://myaccount.google.com/security
+#     2. Enable 2-Step Verification (required)
+#     3. Go to https://myaccount.google.com/apppasswords
+#     4. Select app: Mail, device: Windows Computer → Generate
+#     5. Copy the 16-character password shown (no spaces)
+# RECIPIENT_EMAIL : where the captures are sent (can be same or different address)
+
+SENDER_EMAIL        = "alphacuetechnologies@gmail.com"       # ← your Gmail address
+SENDER_APP_PASSWORD = "tfss puzm hlxw wxkv"        # ← 16-char App Password
+RECIPIENT_EMAIL     = "alphacuetechnologies@gmail.com"      # ← where to send captures
+
+# Email subject template — {timestamp} is replaced at send time
+EMAIL_SUBJECT       = "AlphaCue Update — {timestamp}"
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -55,7 +62,9 @@ LOG_MAX_BYTES       = 5 * 1024 * 1024  # 5 MB per log file before rotation
 LOG_BACKUP_COUNT    = 3                # keep 3 rotated files
 
 # ---------------------------------------------------------------------------
-# Upload retry
+# Upload (send) retry
 # ---------------------------------------------------------------------------
 UPLOAD_MAX_RETRIES  = 3
 UPLOAD_RETRY_DELAY  = 10              # seconds between retries
+
+'''pyinstaller  --onefile  --noconsole  --name TrackerApp  --add-data "config.py;."  --hidden-import=cv2  --hidden-import=pyautogui  --hidden-import=PIL  --hidden-import=PIL._imagingtk  --hidden-import=smtplib  --hidden-import=email  main.py'''
